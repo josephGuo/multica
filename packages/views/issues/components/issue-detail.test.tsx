@@ -158,6 +158,11 @@ vi.mock("../../editor", async () => ({
     tryOpen: () => false,
     modal: null,
   }),
+  // Pass-through: the detail page wraps its column in the image-sequence
+  // provider, but paging between images is covered in
+  // image-sequence-context.test.tsx against the real provider.
+  ImageSequenceProvider: ({ children }: { children: React.ReactNode }) =>
+    children,
   isPreviewable: () => false,
   ReadonlyContent: ({ content }: { content: string }) => (
     <div data-testid="readonly-content">{content}</div>
@@ -847,6 +852,46 @@ describe("IssueDetail (shared)", () => {
 
     expect(screen.queryByTestId("panel-group")).not.toBeInTheDocument();
     expect(screen.queryByText("Properties")).not.toBeInTheDocument();
+  });
+
+  it("pins the comment composer to the scroll viewport on a wide screen", async () => {
+    const { container } = renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Implement authentication")).toBeInTheDocument();
+    });
+
+    // `bottom-0` is unique to the composer wrapper — the sticky affordances
+    // inside the timeline (comment headers, resolve bars) all pin to `top-0`.
+    expect(container.querySelector(".sticky.bottom-0")).not.toBeNull();
+  });
+
+  it("lets the composer ride the end of the timeline on mobile", async () => {
+    // A pinned composer on a phone sits on the chat launcher's corner at every
+    // scroll position, and the part it covers is its own send button.
+    mockViewport.isMobile = true;
+
+    const { container } = renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Implement authentication")).toBeInTheDocument();
+    });
+
+    expect(container.querySelector(".sticky.bottom-0")).toBeNull();
+  });
+
+  it("reserves the chat launcher's corner at the end of the mobile scroll", async () => {
+    mockViewport.isMobile = true;
+
+    const { container } = renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Implement authentication")).toBeInTheDocument();
+    });
+
+    // Unpinned, the composer lands in that corner once the reader reaches the
+    // bottom, so the column has to end above the launcher rather than under it.
+    expect(container.querySelector(".max-md\\:pb-chat-launcher")).not.toBeNull();
   });
 
   it("hides metadata content from the sidebar and shows a button when the bag has keys", async () => {
