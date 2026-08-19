@@ -88,6 +88,7 @@ export const PluginConfigFieldSchema = z.object({
   required: z.boolean().default(false),
   options: z.array(z.string()).default([]),
   placeholder: z.string().optional(),
+  multiline: z.boolean().default(false),
 }).loose();
 
 export const PluginSurfaceSchema = z.object({
@@ -2467,6 +2468,7 @@ export const DingTalkInstallationSchema = z.object({
   installed_at: z.string().default(""),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
+  bound_dingtalk_user_ids: z.array(z.string()).catch([]).default([]),
 }).loose();
 
 export const EMPTY_DINGTALK_INSTALLATION: DingTalkInstallation = {
@@ -2478,6 +2480,7 @@ export const EMPTY_DINGTALK_INSTALLATION: DingTalkInstallation = {
   installed_at: "",
   created_at: "",
   updated_at: "",
+  bound_dingtalk_user_ids: [],
 };
 
 export const ListDingTalkInstallationsResponseSchema = z.object({
