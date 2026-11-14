@@ -1254,6 +1254,13 @@ interface IssueDetailProps {
   /** Peek only: host controls at the end of the header (open full page, close). */
   trailingActions?: ReactNode;
   /**
+   * The host's own actions on what it has open, ahead of the issue's in the
+   * header. The inbox puts snooze and archive here: they act on the
+   * notification, which only the inbox knows. A host that passes them owns
+   * archiving, so the header's own archive button for a done issue is left out.
+   */
+  hostActions?: ReactNode;
+  /**
    * Read the viewer's inbox notifications on this issue while it is on screen
    * (MUL-8588). The inbox turns this off for the issue it has open: it reads
    * the notification it selected itself, and keeps one marked unread there.
@@ -1428,7 +1435,7 @@ export function IssueDetailSkeleton({
           {/* Width and gutters match the loaded column exactly (see its
               comment), so the skeleton doesn't reflow sideways when real
               content mounts. */}
-          <div className={cn(READING_COLUMN, "px-3 py-6 space-y-6 md:px-8 md:py-8")}>
+          <div className={cn(READING_COLUMN, "px-[var(--space-sm,0.75rem)] py-[var(--space-lg,1.5rem)] space-y-6 md:px-[var(--space-xl,2rem)] md:py-[var(--space-xl,2rem)]")}>
             <Skeleton className="h-8 w-3/4" />
             <div className="space-y-2">
               <Skeleton className="h-4 w-full" />
@@ -1472,7 +1479,7 @@ export function IssueDetailSkeleton({
 
 // IssueDetail
 
-export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = ISSUE_DETAIL_LAYOUT_ID, highlightCommentId: linkedCommentId, highlightRequestToken: linkedRequestToken, highlightAppRequestId, leadingAction, variant = "page", trailingActions, readsInbox = true, skipInitialRefetch = false, openDeliverable, onDeliverableLinkDone }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = ISSUE_DETAIL_LAYOUT_ID, highlightCommentId: linkedCommentId, highlightRequestToken: linkedRequestToken, highlightAppRequestId, leadingAction, variant = "page", trailingActions, hostActions, readsInbox = true, skipInitialRefetch = false, openDeliverable, onDeliverableLinkDone }: IssueDetailProps) {
   const isPeek = variant === "peek";
   const { t } = useT("issues");
   const { t: tCommon } = useT("common");
@@ -3497,7 +3504,13 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
 
   const detailContent = (
     <CurrentIssueRenderContextProvider value={currentIssueRenderContext}>
-    <div className="relative flex h-full min-w-0 flex-1 flex-col">
+    <div
+      data-mc="issue-detail"
+      data-status={issue.status}
+      data-priority={issue.priority}
+      data-view={isPeek ? "peek" : "page"}
+      className="relative flex h-full min-w-0 flex-1 flex-col"
+    >
         {/* In-page find bar — floats over the top-right of the content column
             (below the breadcrumb header), outside the scroll container so it
             stays put while the timeline scrolls and its own text isn't walked.
@@ -3533,6 +3546,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 It self-hides when no agent is active. */}
             <IssueAgentHeaderChip issueId={id} onJumpToRun={jumpToRun} />
             <IssueWakeupHeaderChip issueId={id} onOpen={openWakeups} />
+            {hostActions}
             {onDone && !issueBehavesAsAny(issue, ["done", "closed"]) && (
               <IconButton
                 label={t(($) => $.detail.mark_done_tooltip)}
@@ -3543,7 +3557,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 <CircleCheck />
               </IconButton>
             )}
-            {onDone && issueBehavesAs(issue, "done") && (
+            {onDone && !hostActions && issueBehavesAs(issue, "done") && (
               <IconButton
                 label={t(($) => $.detail.archive_tooltip)}
                 tooltipSide="bottom"
@@ -3623,7 +3637,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             // and never reaches the chat launcher's corner (see IssuePeekHost).
             isPeek
               ? "mx-auto w-full px-6 py-5"
-              : cn(READING_COLUMN, "px-3 py-6 max-md:pb-chat-launcher md:px-8 md:py-8"),
+              : cn(READING_COLUMN, "px-[var(--space-sm,0.75rem)] py-[var(--space-lg,1.5rem)] max-md:pb-chat-launcher md:px-[var(--space-xl,2rem)] md:py-[var(--space-xl,2rem)]"),
           )}
         >
           <IssueDuplicateBanner
@@ -3636,6 +3650,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             }
           />
           <div id={descriptionSectionId}>
+          <div data-mc="issue-title">
           {titleLazy.active && (
             <div className={titleLazy.ready ? undefined : "hidden"}>
               <TitleEditor
@@ -3690,6 +3705,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               {issue.title}
             </div>
           )}
+          </div>
           {titleConflictDraft !== null ? (
             <RevisionConflictCompare
               className="mt-2"
@@ -4004,7 +4020,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           <div className="my-8 border-t" />
 
           {/* Activity / Comments */}
-          <div data-comment-images={commentImageLayout}>
+          <div data-mc="issue-activity" data-comment-images={commentImageLayout}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-title-sm font-semibold">{t(($) => $.detail.activity_section)}</h2>
