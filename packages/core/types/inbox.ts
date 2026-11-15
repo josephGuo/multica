@@ -15,12 +15,14 @@ export type InboxItemType =
   | "due_date_changed"
   | "new_comment"
   | "mentioned"
+  | "task_failed"
+  | "reaction_added"
+  // No longer written, but older servers wrote them and those rows remain;
+  // keep their labels and filter groups so history still reads and filters.
   | "review_requested"
   | "task_completed"
-  | "task_failed"
   | "agent_blocked"
   | "agent_completed"
-  | "reaction_added"
   | "quick_create_done"
   | "quick_create_failed"
   // Quick create whose outcome could not be verified. Distinct from
@@ -34,6 +36,10 @@ export type InboxItemType =
   // Sub-issues of an issue assigned to the recipient closed (the child_done
   // system rule notifies a member assignee instead of waking an agent).
   | "children_done"
+  // A workspace owner added themselves to a private project the recipient is
+  // a member of. Issue-less: details carry project_id, project_title and
+  // joined_by (the owner's name).
+  | "project_owner_joined"
   // Connected Apps (MUL-8516): an agent waits on the recipient to confirm an
   // app call, or to connect their account.
   | "app_action_requested"

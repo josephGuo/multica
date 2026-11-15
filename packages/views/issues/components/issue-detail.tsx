@@ -12,7 +12,7 @@ import { useStatusLabel } from "../utils/status-label";
 import { priorityLabel } from "../utils/priority-label";
 import { useIssueStatuses } from "@multica/core/issue-statuses/hooks";
 import { useState, useEffect, useCallback, useMemo, useRef, useId, Fragment, type ReactNode } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { Virtuoso, type ListRange, type VirtuosoHandle } from "react-virtuoso";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { AppLink, useBackOrReplace } from "../../navigation";
 import { IssueDuplicateBanner, IssueDuplicatesSection, isDuplicateIssue } from "./issue-duplicates";
@@ -98,7 +98,7 @@ import { AssigneePicker } from "./pickers/assignee-picker";
 import { LabelPicker } from "./pickers/label-picker";
 import { CustomPropertyValueEditor, CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
 import { Switch } from "@multica/ui/components/ui/switch";
-import { IssueActionsDropdown, useIssuePageMenu, useIssueActions, useArchivedInboxItemId, IssueActionsContextMenu, IssueContextMenuProvider } from "../actions";
+import { IssueActionsDropdown, useIssuePageMenu, useIssueActions, useArchivedInboxItemId, IssueActionsContextMenu, IssueContextMenuProvider, IssueInboxActions } from "../actions";
 import { LabelChip } from "../../labels/label-chip";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import { SubIssuesAgentWorkingChip } from "./sub-issues-agent-working-chip";
@@ -1228,10 +1228,9 @@ interface IssueDetailProps {
   /**
    * Bump to replay the `highlightCommentId` landing on an already-mounted
    * detail. A remount replays it by itself (fresh mount, cleared memento
-   * entry); this token is for the one path with neither remount nor
-   * guaranteed re-render — re-clicking the notification row that is already
-   * open (see InboxPage.handleSelect). The bump both re-arms the landing
-   * guard and forces the render that re-reads the cleared memento entry.
+   * entry); this token is for a host that asks again with neither remount
+   * nor guaranteed re-render. The bump both re-arms the landing guard and
+   * forces the render that re-reads the cleared memento entry.
    */
   highlightRequestToken?: number;
   /** The app confirmation an Inbox notification points at; its card scrolls
@@ -1633,10 +1632,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const stickyComposer = useStickyComposer();
   // Read by the image rules in editor/styles/attachment.css.
   const commentImageLayout = useCommentComposerStore((s) => s.imageLayout);
-  // Mobile shows it only near the top of the page, where it covers the text
-  // column the least; desktop shows it whenever the latest entry is more than
-  // a screen away.
-  const jumpToLatest = useJumpToLatest(scrollContainerEl, { nearTopOnly: isMobile });
 
   // Per-session: which resolved threads the user has temporarily expanded.
   // Not persisted (matches Linear) — reload collapses everything back to bars.
@@ -1814,12 +1809,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     submitComment, submitReply,
     editComment, deleteComment, toggleResolveComment, toggleReaction: handleToggleReaction,
   } = useIssueTimeline(id, user?.id, activeDeliverableJump?.commentId);
-  const newComments = useNewCommentsWhileAway(timeline, {
-    ready: !timelineLoading,
-    away: jumpToLatest.visible,
-    userId: user?.id,
-    resetKey: id,
-  });
 
   const { data: commentTasks, isLoading: commentTasksLoading } = useQuery(issueTasksOptions(id));
   const enteringRunIds = useNewRunIds(id, commentTasks);
@@ -2068,6 +2057,32 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const handleTimelineHeightChange = useCallback((height: number) => {
     if (height > 0) setMeasuredTimelineId(id);
   }, [id]);
+  // Whether Virtuoso's rendered rows (overscan included) stop short of the
+  // last one; rows past them are only estimated. Settled from Virtuoso's own
+  // range report, not `items.length`: a comment appended at the bottom is
+  // unrendered for a frame, and that frame must not read as "away".
+  const timelineItemCountRef = useRef(items.length);
+  timelineItemCountRef.current = items.length;
+  const [timelineTail, setTimelineTail] = useState({ issueId: id, pending: false });
+  const handleTimelineRangeChanged = useCallback((range: ListRange) => {
+    const pending = range.endIndex < timelineItemCountRef.current - 1;
+    setTimelineTail((prev) => (prev.issueId === id && prev.pending === pending ? prev : { issueId: id, pending }));
+  }, [id]);
+  // Mobile shows it only near the top of the page, where it covers the text
+  // column the least; desktop shows it whenever the latest entry is more than
+  // a screen away.
+  const jumpToLatest = useJumpToLatest(scrollContainerEl, {
+    nearTopOnly: isMobile,
+    tailPending: !isFlatTimeline && timelineTail.issueId === id && timelineTail.pending,
+  });
+  // Keyed to `away`, not `visible`: mobile hides the button past the top of
+  // the page, but the reader has not reached the new comments there.
+  const newComments = useNewCommentsWhileAway(timeline, {
+    ready: !timelineLoading,
+    away: jumpToLatest.away,
+    userId: user?.id,
+    resetKey: id,
+  });
   const pendingHighlight = !!highlightCommentId && consumedHighlightId !== highlightCommentId;
   const { pending: readingAnchor, complete: completeAnchorRestore } = useIssueTimelineAnchor({
     containerKey: scrollContainerKey,
@@ -3539,6 +3554,16 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 It self-hides when no agent is active. */}
             <IssueAgentHeaderChip issueId={id} onJumpToRun={jumpToRun} />
             <IssueWakeupHeaderChip issueId={id} onOpen={openWakeups} />
+            {!onDone && !isPeek && (
+              <IssueInboxActions
+                issueId={id}
+                onMarkDone={
+                  issueBehavesAsAny(issue, ["done", "closed"])
+                    ? undefined
+                    : (onSaved) => handleUpdateField({ status: "done" }, { onSuccess: onSaved })
+                }
+              />
+            )}
             {onDone && !issueBehavesAsAny(issue, ["done", "closed"]) && (
               <IconButton
                 label={t(($) => $.detail.mark_done_tooltip)}
@@ -4190,6 +4215,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       initialScrollTop={readingAnchor ? undefined : restoredScrollTop}
                       increaseViewportBy={{ top: 800, bottom: 800 }}
                       totalListHeightChanged={handleTimelineHeightChange}
+                      rangeChanged={handleTimelineRangeChanged}
                       computeItemKey={(_i, item) => `${item.kind}:${item.kind === "run" ? item.run.task.id : item.id}`}
                       // Also load-bearing for long threads: keepThreadRowAnchored
                       // corrects after Virtuoso's resize handling in the same frame.
