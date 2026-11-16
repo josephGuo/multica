@@ -350,12 +350,43 @@ multica autopilot trigger-add <autopilot-id> --cron "0 9 * * 1" --timezone Europ
 - A workspace's `--context` is provided to every agent in the workspace. `--slug` cannot be changed after creation. `--issue-prefix` is uppercased; changing it renumbers every existing issue, and old identifiers in external references stop resolving.
 - `--issue-title-template` interpolates only `{{date}}` (UTC, `YYYY-MM-DD`) and rejects any other `{{...}}` token. A schedule trigger's `--timezone` defaults to UTC.
 
+### Webhook event filters [#webhook-event-filters]
+
+Use `--event-filters-file` on `autopilot trigger-add` or `trigger-update` to configure a webhook trigger's event and action filters. Save a nonempty JSON array as `filters.json`:
+
+```json
+[
+  {"event": "pull_request_review", "actions": ["submitted"]},
+  {"event": "push"}
+]
+```
+
+This accepts PR review submissions and all push events. Omitting `actions` or using an empty actions array accepts every action for that event.
+
+```bash
+multica autopilot trigger-add <autopilot-id> --kind webhook --event-filters-file filters.json
+multica autopilot trigger-list <autopilot-id> --full-id
+multica autopilot trigger-update <autopilot-id> <trigger-id> --event-filters-file filters.json
+multica autopilot get <autopilot-id> --output json
+```
+
+The file replaces the entire filter list on update. Omitting both filter options preserves the saved filters, including when updating a label or enabling/disabling the trigger. `autopilot get` returns the filters in the top-level `triggers` array.
+
+To remove all filters and accept every event, use the update-only flag:
+
+```bash
+multica autopilot trigger-update <autopilot-id> <trigger-id> --clear-event-filters
+```
+
+`--clear-event-filters` and `--event-filters-file` cannot be combined. Top-level `null` or an empty array, unknown fields, malformed JSON, and blank event/action names are rejected. These options apply only to webhook triggers; creating one without a filter file accepts all events. See [Autopilots](/autopilots#event-filters) for how incoming events are matched.
+
 ## Command overview
 
 | Command | Purpose |
 | --- | --- |
 | `issue` | Create, update, assign, and search issues; manage comments, subscribers, labels, properties, wakeups, the timeline, and runs |
 | `project` | Manage projects, their resources, and the workflow they use |
+| `inbox` | Read your notifications without changing read status |
 | `workflow` | Manage issue workflows: statuses and who handles each one |
 | `issue-status` | Manage the workspace status catalog: statuses, their color, and their icon |
 | `label`, `property` | Manage workspace labels and custom properties |
@@ -446,6 +477,8 @@ Migration from CSV parsing: replace `--attachment a,b` with `--attachment a --at
 | | `search <query>` | Search issues | `--limit`, `--include-closed`, `--project` |
 | | `children <id>` | List sub-issues grouped by stage | |
 | | `pull-requests <id>` | List linked PRs | |
+| | `pull-requests link <id> <pr-url>` | Link a synced PR whose title and branch lack the issue key | Also restores a PR removed with `unlink` |
+| | `pull-requests unlink <id> <pr>` | Remove a linked PR and keep it removed | `<pr>` is the PR URL, its number, or its id |
 | | `comment list/add/update/delete/resolve/unresolve` | Manage comments | `add`: `--content` / `--content-stdin` / `--content-file`, `--parent`, `--attachment`; `update`: `--expected-revision` (required), `--content` / `--content-stdin` / `--content-file`; `list`: `--since`, `--thread`, `--tail`, `--recent`, `--roots-only`, `--summary`, `--compact`, `--full` |
 | | `timeline <id>` | List activity records and comments in time order | `--action` (repeatable), `--activity-only`, `--since`, `--tail` |
 | | `wakeup events/list/get/create/update/disable/trigger/delete/checkin/runs` | Manage issue wakeups; see [Issue wakeups](/issue-wakeups) | `create` / `update`: `--agent-id`, `--kind` (`event`, `at`, `every`, `cron`), `--event`, `--at` / `--after`, `--every`, `--cron`, `--timezone`, `--until-*` conditions, `--expires-in` / `--expires-at`, `--instruction` / `--instruction-file`; `checkin`: `--note` |
@@ -495,6 +528,7 @@ Migration from CSV parsing: replace `--attachment a,b` with `--attachment a --at
 | | `member list/add/set-role/remove` | Manage squad members | |
 | | `activity <issue-id> <outcome>` | Record a leader evaluation | |
 | `chat` | `history`, `thread [id]` | Read the external chat session an agent is currently handling | `--limit`, `--before` |
+| `inbox` | `list` | [Read your active notifications](/inbox) without marking them read | `--project`, `--type`, `--output` (`table` or `json`); filters apply locally |
 
 ### Runtime
 

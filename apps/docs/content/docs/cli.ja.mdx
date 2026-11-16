@@ -335,12 +335,43 @@ multica autopilot trigger-add <autopilot-id> --cron "0 9 * * 1" --timezone Asia/
 - ワークスペースの `--context` は、ワークスペース内のすべてのエージェントに渡されます。`--slug` は作成後に変更できません。`--issue-prefix` は大文字に変換され、変更すると既存のすべてのタスクが振り直され、外部から参照している古い番号は使えなくなります。
 - `--issue-title-template` で置き換えられるのは `{{date}}`（UTC、`YYYY-MM-DD`）だけで、ほかの `{{...}}` は拒否されます。スケジュールトリガーの `--timezone` は既定で UTC です。
 
+### Webhook イベントフィルター [#webhook-event-filters]
+
+`autopilot trigger-add` または `trigger-update` の `--event-filters-file` で、Webhook トリガーのイベントと action のフィルターを設定できます。空でない JSON 配列を `filters.json` として保存します。
+
+```json
+[
+  {"event": "pull_request_review", "actions": ["submitted"]},
+  {"event": "push"}
+]
+```
+
+この例では、PR レビューの送信とすべての push イベントを受け入れます。`actions` を省略するか空の配列を指定すると、そのイベントのすべての action を受け入れます。
+
+```bash
+multica autopilot trigger-add <autopilot-id> --kind webhook --event-filters-file filters.json
+multica autopilot trigger-list <autopilot-id> --full-id
+multica autopilot trigger-update <autopilot-id> <trigger-id> --event-filters-file filters.json
+multica autopilot get <autopilot-id> --output json
+```
+
+更新時はファイルの内容でフィルター一覧全体を置き換えます。両方のフィルターオプションを省略すると、ラベルの変更やトリガーの有効化・無効化でも保存済みのフィルターを保持します。`autopilot get` はトップレベルの `triggers` 配列でフィルターを返します。
+
+すべてのフィルターを削除して全イベントを受け入れるには、更新専用のオプションを使います。
+
+```bash
+multica autopilot trigger-update <autopilot-id> <trigger-id> --clear-event-filters
+```
+
+`--clear-event-filters` と `--event-filters-file` は同時に指定できません。トップレベルが `null` または空の配列であるファイルや、不明なフィールド、不正な JSON、空または空白のみのイベント名・action 名を含むファイルは拒否されます。これらのオプションは Webhook トリガー専用です。フィルターファイルを指定せずに作成すると全イベントを受け入れます。受信イベントの照合方法は[オートパイロット](/autopilots#event-filters)を参照してください。
+
 ## コマンド概要
 
 | コマンド | 用途 |
 | --- | --- |
 | `issue` | タスクの作成、更新、割り当て、検索。コメント、購読者、ラベル、プロパティ、ウェイクアップ、タイムライン、実行履歴の管理 |
 | `project` | プロジェクトとそのリソースを管理 |
+| `inbox` | 既読状態を変えずに自分の通知を読み取る |
 | `label`、`property` | ワークスペースのラベルとカスタムプロパティを管理 |
 | `view` | 保存したビューを読み取り、ビューに表示されるタスクを一覧 |
 | `agent`、`skill`、`squad` | エージェント、スキル、スクワッドを管理 |
@@ -415,6 +446,8 @@ CLI の設定ファイルには、あなたとして Multica にアクセスで�
 | | `search <query>` | タスクを検索 | `--limit`、`--include-closed`、`--project` |
 | | `children <id>` | サブタスクをステージごとに一覧 | |
 | | `pull-requests <id>` | 関連付けられた PR を一覧 | |
+| | `pull-requests link <id> <pr-url>` | タイトルとブランチにタスクキーがない同期済み PR を関連付け | `unlink` で外した PR の復元にも使えます |
+| | `pull-requests unlink <id> <pr>` | 関連付けた PR を外し、以後自動で関連付けない | `<pr>` は PR の URL、番号、または id |
 | | `comment list/add/update/delete/resolve/unresolve` | コメントを管理 | `add`: `--content` / `--content-stdin` / `--content-file`、`--parent`、`--attachment`；`update`: `--expected-revision`（必須）、`--content` / `--content-stdin` / `--content-file`；`list`: `--since`、`--thread`、`--tail`、`--recent`、`--roots-only`、`--summary`、`--compact`、`--full` |
 | | `timeline <id>` | アクティビティ記録とコメントを時系列で表示 | `--action`（繰り返し可）、`--activity-only`、`--since`、`--tail` |
 | | `wakeup events/list/get/create/update/disable/trigger/delete/checkin/runs` | タスクのウェイクアップを管理。詳しくは[タスクのウェイクアップ](/issue-wakeups) | `create` / `update`: `--agent-id`、`--kind`（`event`、`at`、`every`、`cron`）、`--event`、`--at` / `--after`、`--every`、`--cron`、`--timezone`、`--until-*` 条件、`--expires-in` / `--expires-at`、`--instruction` / `--instruction-file`；`checkin`: `--note` |
@@ -460,6 +493,7 @@ CLI の設定ファイルには、あなたとして Multica にアクセスで�
 | | `member list/add/set-role/remove` | スクワッドのメンバーを管理 | |
 | | `activity <issue-id> <outcome>` | リーダーの評価を記録 | |
 | `chat` | `history`、`thread [id]` | エージェントが現在処理している外部チャットセッションを読み取り | `--limit`、`--before` |
+| `inbox` | `list` | 既読にせずに[現在の通知を読み取る](/inbox) | `--project`、`--type`、`--output`（`table` または `json`）；フィルターはローカルで適用 |
 
 ### Runtime
 
