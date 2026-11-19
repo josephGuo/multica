@@ -254,7 +254,27 @@ export interface WorkspaceSubscriptionSummary {
    * purchases and other plan changes are unavailable.
    */
   planChange: WorkspacePlanChangeHold | null;
+  /**
+   * The workspace's no-card trial. Null when it never had one, while a paid
+   * subscription is in effect, and on a cloud that predates trials.
+   */
+  trial: WorkspaceTrial | null;
 }
+
+/**
+ * A no-card trial of a paid plan. Only `active` grants the plan; the
+ * entitlement, not this object, decides access. Clients count days from
+ * `endsAt` and refresh when it passes.
+ */
+export interface WorkspaceTrial {
+  plan: string;
+  state: WorkspaceTrialState;
+  startedAt: string;
+  endsAt: string;
+}
+
+/** `converted`: the trial ended because the workspace subscribed. */
+export type WorkspaceTrialState = "active" | "expired" | "converted";
 
 export interface WorkspacePlanChangeHold {
   targetPlan: string;
@@ -310,6 +330,11 @@ export interface CreateWorkspaceSubscriptionCheckoutRequest {
   plan: WorkspaceSubscriptionPaidPlan;
   interval: WorkspaceSubscriptionInterval;
   idempotencyKey: string;
+  /**
+   * Seats to buy beyond the current members and pending invitations, so an
+   * invitation held back by the Free member limit fits right after checkout.
+   */
+  additionalSeats?: number;
 }
 
 export interface CreateWorkspaceSubscriptionCheckoutResponse {
@@ -418,10 +443,22 @@ export interface CreateWorkspaceSubscriptionPortalResponse {
  * can be reduced, but nothing can be added. The server enforces on every
  * write; this is only for rendering.
  */
-export type PaidFeature = "private_projects";
+export type PaidFeature = "private_projects" | "guests";
 
 export type WorkspaceFeatureState = "available" | "locked";
 
 export interface WorkspaceFeatures {
   features: Partial<Record<PaidFeature, WorkspaceFeatureState>>;
+}
+
+/**
+ * The plan's member limit (MUL-9488). `off` means no limit applies, which is
+ * also every self-hosted workspace; the counts are null then. Members and
+ * pending invitations both take a slot; guests take none.
+ */
+export interface MemberLimit {
+  action: "off" | "observe" | "enforce";
+  limit: number | null;
+  members: number | null;
+  pendingInvitations: number | null;
 }
