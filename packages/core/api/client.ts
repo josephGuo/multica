@@ -10,6 +10,7 @@ import {
   DocSearchResponseSchema,
   DocCommentSchema,
   DocCommentListSchema,
+  DocCollabTicketSchema,
 } from "../docs/schemas";
 import type {
   Doc,
@@ -20,6 +21,7 @@ import type {
   CreateDocCommentRequest,
   DocTree,
   DocVersion,
+  DocCollabTicket,
   CreateDocRequest,
   UpdateDocRequest,
   CreateDocFolderRequest,
@@ -1093,6 +1095,19 @@ export class ApiClient {
       { versions: [] },
       { endpoint: "GET /api/docs/{id}/versions" },
     ).versions;
+  }
+  /** `state` also asks for the Yjs state saved with the doc, to show it
+   *  before the live session syncs. */
+  async createDocCollabTicket(id: string, options?: { state?: boolean }): Promise<DocCollabTicket> {
+    return parseWithFallback<DocCollabTicket>(
+      await this.fetch<unknown>(`/api/docs/${id}/collab-ticket`, {
+        method: "POST",
+        ...(options?.state ? { body: JSON.stringify({ state: true }) } : {}),
+      }),
+      DocCollabTicketSchema,
+      { enabled: false },
+      { endpoint: "POST /api/docs/{id}/collab-ticket" },
+    );
   }
   async getDocVersion(id: string, number: number): Promise<DocVersion | null> {
     return parseWithFallback<DocVersion | null>(
